@@ -1,0 +1,40 @@
+Thera AI - Third-Party Source Attribution
+=========================================
+
+This software bundles canonical Tipitaka (Pali-Thai Buddhist scripture)
+database files in vendor/D-tipitaka/1.2/, sourced from:
+
+  Upstream:  https://github.com/kit119/D-tipitaka
+  Commit:    645aa33 (2011-07-31)
+  Author:    kit119 <kit119 at gmail dot com>
+  Files:     pali_siam.sql.bz2, thai_mbu.sql.bz2,
+             thai_mcu.sql.bz2, thai_royal.sql.bz2,
+             README.TXT (verbatim, includes author dedication)
+
+The upstream README.TXT, preserved verbatim at
+vendor/D-tipitaka/1.2/README.TXT, contains the author's dedication:
+
+  "In the faith and spirit on Buddhism's way, the author disclaims
+   copyright to this database. It may be used as a basis for other
+   programs, web applications, public domain, open source, or
+   non-commercial distribution. So, it will never been made an
+   encryption or locked password."
+
+Underlying canonical editions and their attribution:
+
+  - Pali Siamratch (Royal Thai Pali Edition, 2469-2471 B.E. /
+    1926-1928) - public domain by age under Thai copyright law
+  - Thai Royal Edition (Royal Pali-Thai translation, mid-20th
+    century) - Thai government / royal religious publication
+  - Tipitaka Thai Maha Chulalongkornrajavidyalaya University (MCU)
+    Edition - institutional translation
+  - Tipitaka Thai Mahamakut Buddhist University (MBU) Edition -
+    institutional translation
+
+Thera AI redistributes these database files in good faith under
+the upstream author's stated open-source-friendly dedication.
+Users of Thera AI inherit this attribution requirement when
+further redistributing.
+
+Thera AI's own code, documentation, and packaging are licensed
+under the MIT License (see LICENSE).

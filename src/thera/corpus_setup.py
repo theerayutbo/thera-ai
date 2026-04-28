@@ -2,7 +2,8 @@
 
 Per spec §10.2 — `thera corpus init` and `thera corpus validate`.
 
-`init` downloads the four `.sql.bz2` dumps from kit119/D-tipitaka commit
+`init` prefers vendored `.sql.bz2` dumps under `vendor/D-tipitaka/1.2/`,
+falls back to downloading the same files from kit119/D-tipitaka commit
 `645aa33`, verifies SHA-256 checksums against a pinned manifest, and builds
 `external/dtipitaka.db` by streaming the decompressed SQL into sqlite3.
 **`external/dtipitaka.db` is the ONLY mutation that `init` performs.** Per
@@ -32,16 +33,25 @@ UPSTREAM_COMMIT = "645aa33"
 UPSTREAM_RAW_BASE = (
     f"https://raw.githubusercontent.com/kit119/D-tipitaka/{UPSTREAM_COMMIT}/1.2"
 )
+VENDOR_SOURCE_DIR = Path("vendor/D-tipitaka/1.2")
+VENDOR_MANIFEST_PATH = VENDOR_SOURCE_DIR / "UPSTREAM_FILES"
 
-# SHA-256 manifest of the four upstream dumps, pinned to commit 645aa33.
-# Recorded from the locally-validated D-Tipitaka clone at
-# `external/D-tipitaka/1.2/` on 2026-04-28.
+# SHA-256 manifest of upstream files vendored from commit 645aa33.
+# The four `.sql.bz2` files are load-bearing for corpus build. README.TXT is
+# bundled for attribution and checked by LOKI against upstream.
 UPSTREAM_FILES: dict[str, str] = {
     "pali_siam.sql.bz2":  "f0b5a644f30c030077543ce396f49921a52ef6f545b9fb177a1d6cb8576f4540",
     "thai_mbu.sql.bz2":   "d464c28b31e61576a57b6e5a2bac2e635300aa52fc8755936c120f7036248b2f",
     "thai_mcu.sql.bz2":   "27b5031fdd3dc1cf9cdc16728a984f7251302f53a52cf603b768124c01ff8e65",
     "thai_royal.sql.bz2": "1c6d13442215902dec64527fa6c88cdfeee30cd2fc6d81d730fc10592b7569f2",
+    "README.TXT":         "f56bdef46d6bf91ad105beb7ff663e0300c0f8b5e17e2c4fbf88765c864f458d",
 }
+CORPUS_DUMP_FILES: tuple[str, ...] = (
+    "pali_siam.sql.bz2",
+    "thai_mbu.sql.bz2",
+    "thai_mcu.sql.bz2",
+    "thai_royal.sql.bz2",
+)
 
 EXPECTED_TABLES: tuple[str, ...] = ("pali_siam", "thai_mbu", "thai_mcu", "thai_royal")
 
@@ -63,6 +73,10 @@ USER_AGENT = "thera-corpus-init/1.0 (+https://github.com/aegiszero/thera)"
 
 class CorpusSetupError(Exception):
     """Bootstrap / validate failed: network, checksum, decompress, or shape."""
+
+
+class CorpusAlreadyExistsError(CorpusSetupError):
+    """Target corpus already exists and `--force` was not requested."""
 
 
 @dataclass(frozen=True)
@@ -95,6 +109,56 @@ def _emit(progress: ProgressCallback | None, message: str) -> None:
         progress(message)
 
 
+def _verify_payload(filename: str, payload: bytes) -> None:
+    expected_sha = UPSTREAM_FILES[filename]
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest != expected_sha:
+        raise CorpusSetupError(
+            f"checksum mismatch for {filename}: expected {expected_sha}, got {digest}"
+        )
+
+
+def _load_vendor_payloads(progress: ProgressCallback | None = None) -> dict[str, bytes] | None:
+    payloads: dict[str, bytes] = {}
+    for filename in CORPUS_DUMP_FILES:
+        path = VENDOR_SOURCE_DIR / filename
+        if not path.exists():
+            _emit(progress, f"vendor source missing: {path}; falling back to network")
+            return None
+        try:
+            payload = path.read_bytes()
+            _verify_payload(filename, payload)
+        except CorpusSetupError as exc:
+            _emit(progress, f"vendor source invalid: {exc}; falling back to network")
+            return None
+        except OSError as exc:
+            _emit(progress, f"vendor source unreadable: {path}: {exc}; falling back to network")
+            return None
+        payloads[filename] = payload
+    _emit(progress, f"using vendored corpus sources from {VENDOR_SOURCE_DIR}")
+    return payloads
+
+
+def _fetch_network_payloads(
+    fetcher: Fetcher,
+    progress: ProgressCallback | None = None,
+) -> dict[str, bytes]:
+    payloads: dict[str, bytes] = {}
+    for filename in CORPUS_DUMP_FILES:
+        url = f"{UPSTREAM_RAW_BASE}/{filename}"
+        _emit(progress, f"downloading {filename} from {url}")
+        try:
+            payload = fetcher(url)
+        except CorpusSetupError:
+            raise
+        except Exception as exc:
+            raise CorpusSetupError(f"download failed for {filename}: {exc}") from exc
+        _verify_payload(filename, payload)
+        _emit(progress, f"  checksum OK ({UPSTREAM_FILES[filename][:12]}...)")
+        payloads[filename] = payload
+    return payloads
+
+
 def init_corpus(
     target_path: Path,
     *,
@@ -108,34 +172,22 @@ def init_corpus(
     network, checksum mismatch, decompression, or SQL import).
     """
     if target_path.exists() and not force:
-        raise CorpusSetupError(
+        raise CorpusAlreadyExistsError(
             f"corpus already exists at {target_path}; pass --force to overwrite"
         )
-    if fetcher is None:
-        fetcher = _default_fetcher
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
+    payloads: dict[str, bytes] | None = None
+    if fetcher is None:
+        payloads = _load_vendor_payloads(progress)
+        fetcher = _default_fetcher
+    if payloads is None:
+        payloads = _fetch_network_payloads(fetcher, progress)
+
     decompressed_chunks: list[bytes] = []
-    for filename, expected_sha in UPSTREAM_FILES.items():
-        url = f"{UPSTREAM_RAW_BASE}/{filename}"
-        _emit(progress, f"downloading {filename} from {url}")
+    for filename in CORPUS_DUMP_FILES:
         try:
-            payload = fetcher(url)
-        except CorpusSetupError:
-            raise
-        except Exception as exc:
-            raise CorpusSetupError(f"download failed for {filename}: {exc}") from exc
-
-        digest = hashlib.sha256(payload).hexdigest()
-        if digest != expected_sha:
-            raise CorpusSetupError(
-                f"checksum mismatch for {filename}: "
-                f"expected {expected_sha}, got {digest}"
-            )
-        _emit(progress, f"  checksum OK ({digest[:12]}…)")
-
-        try:
-            decompressed_chunks.append(bz2.decompress(payload))
+            decompressed_chunks.append(bz2.decompress(payloads[filename]))
         except OSError as exc:
             raise CorpusSetupError(f"failed to decompress {filename}: {exc}") from exc
 

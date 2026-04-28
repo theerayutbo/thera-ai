@@ -23,9 +23,13 @@ from typer.testing import CliRunner
 
 import thera.cli as cli
 from thera.corpus_setup import (
+    CORPUS_DUMP_FILES,
     EXPECTED_TOTAL_ROWS,
     UPSTREAM_FILES,
     UPSTREAM_RAW_BASE,
+    VENDOR_MANIFEST_PATH,
+    VENDOR_SOURCE_DIR,
+    CorpusAlreadyExistsError,
     CorpusSetupError,
     init_corpus,
     validate_corpus,
@@ -38,7 +42,7 @@ runner = CliRunner()
 
 
 def _have_real_source_dumps() -> bool:
-    return all(_payload_path(name) is not None for name in UPSTREAM_FILES)
+    return all(_payload_path(name) is not None for name in CORPUS_DUMP_FILES)
 
 
 def _payload_path(name: str) -> Path | None:
@@ -64,7 +68,7 @@ def _payload_path(name: str) -> Path | None:
 def _real_payloads() -> dict[str, bytes]:
     """Read the four pinned `.sql.bz2` payloads from the local upstream clone."""
     payloads: dict[str, bytes] = {}
-    for name in UPSTREAM_FILES:
+    for name in CORPUS_DUMP_FILES:
         path = _payload_path(name)
         if path is None:
             raise OSError(f"{name} is not readable from {SOURCE_DIR} or {TMP_SOURCE_DIR}")
@@ -162,7 +166,7 @@ def test_init_refuses_overwrite_without_force(tmp_path: Path) -> None:
     target.write_bytes(b"sentinel")
     sentinel_size = target.stat().st_size
 
-    with pytest.raises(CorpusSetupError, match="already exists"):
+    with pytest.raises(CorpusAlreadyExistsError, match="already exists"):
         init_corpus(target, fetcher=lambda _url: b"unused")
 
     # Sentinel intact — no clobber.
@@ -222,6 +226,7 @@ def test_corpus_init_cli_builds_fresh_target_with_pinned_checksums(
     target = tmp_path / "external" / "dtipitaka.db"
     payloads = _synthetic_payloads(monkeypatch)
     monkeypatch.setattr(cli, "DEFAULT_DB_PATH", target)
+    monkeypatch.setattr("thera.corpus_setup.VENDOR_SOURCE_DIR", tmp_path / "absent-vendor")
     monkeypatch.setattr(
         "thera.corpus_setup._default_fetcher",
         _make_fetcher(payloads),
@@ -254,6 +259,7 @@ def test_corpus_init_cli_force_overwrites_existing_target(
     target.write_bytes(b"sentinel")
     payloads = _synthetic_payloads(monkeypatch)
     monkeypatch.setattr(cli, "DEFAULT_DB_PATH", target)
+    monkeypatch.setattr("thera.corpus_setup.VENDOR_SOURCE_DIR", tmp_path / "absent-vendor")
     monkeypatch.setattr(
         "thera.corpus_setup._default_fetcher",
         _make_fetcher(payloads),
@@ -279,6 +285,7 @@ def test_corpus_init_cli_network_failure_exits_70(
 
     target = tmp_path / "external" / "dtipitaka.db"
     monkeypatch.setattr(cli, "DEFAULT_DB_PATH", target)
+    monkeypatch.setattr("thera.corpus_setup.VENDOR_SOURCE_DIR", tmp_path / "absent-vendor")
 
     def _fail(_url: str) -> bytes:
         raise URLError("offline")
@@ -441,16 +448,29 @@ def test_corpus_validate_when_db_missing_exits_64(
 
 
 def test_upstream_manifest_pins_four_files_with_sha256() -> None:
-    """Manifest invariant: 4 expected dumps, all with non-empty SHA-256 hashes."""
+    """Manifest invariant: 4 dumps + README.TXT, all with SHA-256 hashes."""
     assert set(UPSTREAM_FILES) == {
         "pali_siam.sql.bz2",
         "thai_mbu.sql.bz2",
         "thai_mcu.sql.bz2",
         "thai_royal.sql.bz2",
+        "README.TXT",
     }
     for filename, sha in UPSTREAM_FILES.items():
         assert len(sha) == 64, f"{filename} sha length {len(sha)} != 64"
         assert all(c in "0123456789abcdef" for c in sha), f"{filename} sha not hex"
+
+
+def test_vendor_manifest_matches_code_manifest() -> None:
+    if not VENDOR_MANIFEST_PATH.exists():
+        pytest.skip(f"vendor manifest not present at {VENDOR_MANIFEST_PATH}")
+
+    manifest: dict[str, str] = {}
+    for line in VENDOR_MANIFEST_PATH.read_text(encoding="utf-8").splitlines():
+        sha, filename = line.split(maxsplit=1)
+        manifest[filename] = sha
+
+    assert manifest == UPSTREAM_FILES
 
 
 @pytest.mark.corpus
@@ -461,10 +481,53 @@ def test_upstream_files_match_local_clone_when_present() -> None:
         pytest.skip(f"upstream clone not present under {SOURCE_DIR}")
     import hashlib
 
-    for filename, expected_sha in UPSTREAM_FILES.items():
+    for filename in CORPUS_DUMP_FILES:
+        expected_sha = UPSTREAM_FILES[filename]
         path = _payload_path(filename)
         assert path is not None
         actual = hashlib.sha256(path.read_bytes()).hexdigest()
         assert actual == expected_sha, (
             f"{filename}: clone sha {actual} != pinned manifest {expected_sha}"
         )
+
+
+def test_init_uses_local_vendor_when_present(tmp_path: Path) -> None:
+    """v1.1 default path: local vendor builds a DB and subprocess output is byte-equal."""
+    if not all((VENDOR_SOURCE_DIR / name).exists() for name in CORPUS_DUMP_FILES):
+        pytest.skip(f"vendored corpus files not present under {VENDOR_SOURCE_DIR}")
+
+    target = tmp_path / "external" / "dtipitaka.db"
+
+    init_corpus(target, fetcher=None)
+    assert target.exists()
+
+    conn = sqlite3.connect(f"file:{target}?mode=ro", uri=True)
+    try:
+        report = validate_corpus(conn)
+        items, content = conn.execute(
+            "SELECT items, content FROM thai_royal WHERE volume = 1 AND page = 1"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert report.ok, report.errors
+    assert report.total_rows == EXPECTED_TOTAL_ROWS
+
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(Path("src").resolve()),
+        "THERA_DB_PATH": str(target),
+    }
+    result = subprocess.run(
+        [sys.executable, "-m", "thera.cli", "read", "1", "1"],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    expected_stdout = f"[ฉบับหลวง เล่ม 1 หน้า 1]\n{items}\n\n{content}"
+    if not expected_stdout.endswith("\n"):
+        expected_stdout += "\n"
+    assert result.stdout == expected_stdout

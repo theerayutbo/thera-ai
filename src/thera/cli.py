@@ -48,6 +48,7 @@ from thera.corpus import (
 )
 from thera.corpus_setup import (
     EXPECTED_TOTAL_ROWS,
+    CorpusAlreadyExistsError,
     CorpusSetupError,
     init_corpus,
     validate_corpus,
@@ -58,6 +59,7 @@ from thera.sikkhapada import parse_sikkhapada
 app = typer.Typer(
     help="Thera — verbatim Tipitaka retrieval CLI (zero-hallucination, quote-not-paraphrase).",
     no_args_is_help=True,
+    invoke_without_command=True,
     add_completion=False,
 )
 console = Console()
@@ -880,7 +882,7 @@ def sikkhapada(
 def _emit_sikkhapada_list(who: str, report, output_format: str) -> None:
     """List default — exit 70 if count mismatch (§9.3 + §1.4 abstain>guess)."""
     if report.parsed_count != report.expected_count:
-        _emit_sikkhapada_diagnostic(who, report)
+        _emit_sikkhapada_diagnostic(who, report, output_format)
         raise typer.Exit(EX_SOFTWARE)
     if output_format == "json":
         for rule in report.rules:
@@ -955,8 +957,22 @@ def _emit_sikkhapada_single(
         sys.stdout.write("\n")
 
 
-def _emit_sikkhapada_diagnostic(who: str, report) -> None:
+def _emit_sikkhapada_diagnostic(who: str, report, output_format: str = "text") -> None:
     """Diagnostic for hard-count mismatch — never pads or truncates."""
+    missing = report.missing[:30]
+    truncated = len(report.missing) > 30
+    if output_format == "json":
+        payload = {
+            "who": who,
+            "parsed_count": report.parsed_count,
+            "expected_count": report.expected_count,
+            "delta": report.expected_count - report.parsed_count,
+            "missing": missing,
+            "missing_truncated": truncated,
+            "ambiguous_notes": report.ambiguous_notes,
+        }
+        err_console.print(json.dumps(payload, ensure_ascii=False))
+        return
     err_console.print(
         f"[red]sikkhapada parser yielded {report.parsed_count} {who} rules, "
         f"expected {report.expected_count}.[/red]"
@@ -965,8 +981,10 @@ def _emit_sikkhapada_diagnostic(who: str, report) -> None:
         f"  delta: {report.expected_count - report.parsed_count} rule(s); "
         f"abstaining per §1.4 — never pad or truncate."
     )
-    err_console.print(f"  missing rule numbers ({len(report.missing)}): "
-                      f"{report.missing[:30]}{'...' if len(report.missing) > 30 else ''}")
+    err_console.print(
+        f"  missing rule numbers ({len(report.missing)}): "
+        f"{missing}{'...' if truncated else ''}"
+    )
     if report.ambiguous_notes:
         err_console.print("  ambiguous-split locations:")
         for note in report.ambiguous_notes:
@@ -1002,7 +1020,7 @@ def corpus(
             err_console.print(f"[red]corpus init failed:[/red] {exc}")
             # Existing-corpus gate should be EX_USAGE per §11; everything else
             # (network, checksum, decompress, SQL import) is EX_SOFTWARE.
-            if "already exists" in str(exc):
+            if isinstance(exc, CorpusAlreadyExistsError):
                 raise typer.Exit(EX_USAGE) from exc
             raise typer.Exit(EX_SOFTWARE) from exc
         console.print(f"[green]corpus initialized at {DEFAULT_DB_PATH}[/green]")

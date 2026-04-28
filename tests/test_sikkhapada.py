@@ -67,6 +67,25 @@ def test_bhikkhuni_default_exits_70_with_diagnostic_when_count_mismatches() -> N
     assert result.stdout == ""
 
 
+def test_bhikkhu_default_json_exits_70_with_json_diagnostic() -> None:
+    result = runner.invoke(
+        cli.app,
+        ["sikkhapada", "bhikkhu", "--format", "json"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 70
+    assert result.stdout == ""
+    payload = json.loads(result.stderr)
+    assert payload["who"] == "bhikkhu"
+    assert payload["parsed_count"] < payload["expected_count"]
+    assert payload["expected_count"] == 227
+    assert payload["delta"] == payload["expected_count"] - payload["parsed_count"]
+    assert isinstance(payload["missing"], list)
+    assert len(payload["missing"]) <= 30
+    assert isinstance(payload["ambiguous_notes"], list)
+
+
 def test_bhikkhu_rule_1_returns_parajika_1_verbatim_with_royal_citation() -> None:
     """§9.3 acceptance #3 — single-rule lookup returns full verbatim row."""
     result = runner.invoke(

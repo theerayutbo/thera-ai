@@ -40,6 +40,10 @@ pip install -e .
 thera --help
 ```
 
+v1.1 รวม source dumps ของ D-Tipitaka ที่ pin แล้วไว้ใน
+`vendor/D-tipitaka/1.2/` เมื่อ clone repo ครบ `thera corpus init` จึงสร้าง
+`external/dtipitaka.db` จากไฟล์ vendored ในเครื่องได้โดยไม่ต้องติดต่อ GitHub
+
 ถ้าใช้แบบ development โดยไม่ติดตั้ง:
 
 ```bash
@@ -197,6 +201,9 @@ v1.0 ตีตามตัวอักษรและตั้งใจ conserva
   ออกด้วย exit 70 แทนการ padding ช่องที่หายไป
 - อรรถกถา, NotebookLM curated slices, และ canonical personas อยู่นอก scope v1.0
 - `verify` ต้องใช้ network ไปยัง 84000.org แต่ retrieval แบบ offline ยังใช้งานได้
+- v1.1 ลด single point of failure จาก upstream kit119 สำหรับการสร้าง corpus
+  เพราะมี vendored source ใน repo แต่ canonical snapshot ยังเป็น commit
+  `645aa33` เหมือนเดิม
 - ไม่มี long-lived cache หรือ service process; CLI แต่ละครั้งเปิด SQLite โดยตรง
 
 ## Contributing
@@ -208,7 +215,10 @@ real-corpus integration เมื่อคำสั่งแตะ corpus หร
 
 ## Acknowledgments
 
-- `kit119/D-tipitaka` สำหรับ D-Tipitaka SQLite corpus
+- Thera AI มาพร้อมฐานข้อมูลพระไตรปิฎกที่ vendored จาก
+  [kit119/D-tipitaka](https://github.com/kit119/D-tipitaka) (commit `645aa33`,
+  ปี 2011) ซึ่งผู้พัฒนาอุทิศให้ใช้ต่อแบบ open-source / public-domain ตามไฟล์
+  `README.TXT` ดูรายละเอียดการให้เครดิตที่ [NOTICE](NOTICE)
 - `84000.org` สำหรับ live Royal/MCU comparator ที่ `thera verify` ใช้
 - SQLite, ICU, Typer, Rich, pytest, Ruff, และ Python packaging ecosystem
 

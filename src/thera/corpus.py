@@ -17,6 +17,7 @@ Retrieval-only.
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 from contextlib import suppress
@@ -25,7 +26,7 @@ from pathlib import Path
 
 from thera.citation import EDITION_TABLES, Edition
 
-DEFAULT_DB_PATH = Path("external/dtipitaka.db")
+DEFAULT_DB_PATH = Path(os.environ.get("THERA_DB_PATH", "external/dtipitaka.db"))
 THAI_RE = re.compile(r"[\u0E00-\u0E7F]")
 
 # --- Royal ↔ MBU volume mapping (LOKI 2026-04-26, docs/corpus-mbu-volume-mapping.md) ---

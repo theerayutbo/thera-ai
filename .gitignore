@@ -54,8 +54,6 @@ coverage.xml
 # Large data — do NOT commit to git
 external/
 external/dtipitaka.db
-external/D-tipitaka/1.2/*.sql
-external/D-tipitaka/1.2/*.sql.bz2
 data/
 data/.84000_offsets.tsv
 corpus/

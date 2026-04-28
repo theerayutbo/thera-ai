@@ -1,6 +1,6 @@
 [project]
 name = "thera"
-version = "0.0.1"
+version = "1.1.0"
 description = "Zero-hallucination Tipitaka CLI — verbatim retrieval + cross-reference + contradiction surfacing for teaching Buddhism from canonical text"
 readme = "README.md"
 license = { text = "MIT" }

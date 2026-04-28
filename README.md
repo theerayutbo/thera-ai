@@ -42,6 +42,10 @@ Then check the binary:
 thera --help
 ```
 
+v1.1 ships the pinned D-Tipitaka source dumps in `vendor/D-tipitaka/1.2/`.
+After cloning the full repo, `thera corpus init` can build
+`external/dtipitaka.db` from local vendored files without contacting GitHub.
+
 For development without installing, use:
 
 ```bash
@@ -201,6 +205,9 @@ v1.0 is literal and intentionally conservative.
 - Atthakatha/commentary, NotebookLM curated slices, and canonical personas are
   out of scope for v1.0.
 - `verify` requires network access to 84000.org. Offline retrieval still works.
+- v1.1 vendored corpus sources reduce the kit119 upstream single point of
+  failure for corpus initialization, but they do not change the canonical
+  snapshot: all data remains pinned to commit `645aa33`.
 - There is no long-lived cache or service process; each CLI invocation opens the
   SQLite database directly.
 
@@ -214,7 +221,11 @@ touches the corpus or network.
 
 ## Acknowledgments
 
-- `kit119/D-tipitaka` for the D-Tipitaka SQLite corpus.
+- Thera AI ships with a vendored copy of the
+  [kit119/D-tipitaka](https://github.com/kit119/D-tipitaka) database
+  (commit `645aa33`, 2011), dedicated to open-source / public-domain-leaning
+  redistribution per its `README.TXT`. See [NOTICE](NOTICE) for the full
+  attribution chain.
 - `84000.org` for the live Royal/MCU comparator used by `thera verify`.
 - SQLite, ICU, Typer, Rich, pytest, Ruff, and the Python packaging ecosystem.
 

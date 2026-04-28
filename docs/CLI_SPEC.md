@@ -409,6 +409,19 @@ For each command:
 
 **§12.1 Real-corpus integration test (REQUIRED, post-§19.3 amendment by ARIA §26)**: every command that touches the corpus or external network MUST have at least one `subprocess.run` test that invokes the actual CLI binary (`python -m thera.cli ...` or installed `thera ...`) against `external/dtipitaka.db` (or, for `verify`, against the live 84000.org endpoint with `@pytest.mark.verify`) and asserts stdout byte-equals the SQL ground-truth (or, for network commands, asserts the documented exit-code behavior holds against real-world data shapes). Mocked/CliRunner tests verify parser+logic; real-corpus integration verifies that parser+logic+real-world-data-shape compose without surprises. Rationale: §18 B1 (typer/click) and §24 B1 (TIS-620 strict decoder vs 84000's byte 0xa0) both passed mocked tests but failed at the real-world data-shape boundary. Mock fixtures must include real-world bytes/data (per §24 B3) so future regressions surface in mocked path too. Apply to: search, read, compare, cross-ref, verify, sikkhapada, corpus init, corpus validate.
 
+### §28.7 Scope (post-§31)
+
+The §28.7 language-switcher requirement applies to the enumerated user-facing
+documentation pairs only: `README.md` / `README.th.md`,
+`docs/QUICKSTART.md` / `docs/QUICKSTART.th.md`,
+`docs/ARCHITECTURE.md` / `docs/ARCHITECTURE.th.md`, and
+`docs/USE_CASES.md` / `docs/USE_CASES.th.md`.
+
+Contributor-internal artifacts remain outside that language-switcher scope:
+`docs/CLI_SPEC.md`, `docs/corpus-mbu-volume-mapping.md`, `DESIGN_LOG.md`,
+`HANDOFF.md`, `.ai-memory/HANDOFF.md`, and similar role/process memory files.
+This records the narrow-read ARIA locked at DESIGN_LOG §30.2 and closes m23.
+
 ### §12.2 MBU-mapping tests (LOKI gate items)
 
 - `to_mbu_volumes(43)` → `[88]`
