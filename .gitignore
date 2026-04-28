@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+.uv/
+uv.lock
+
+# Testing / linting
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+*.cover
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Large data — do NOT commit to git
+external/
+external/dtipitaka.db
+external/D-tipitaka/1.2/*.sql
+external/D-tipitaka/1.2/*.sql.bz2
+data/
+data/.84000_offsets.tsv
+corpus/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Local research artifacts (not for public repo; ARIA-workspace internal)
+.aria/
+.ai-memory/
+.claude/
+SESSION_LOG.md
+HANDOFF.md
+RESEARCHER-THERA.md
+km/
+CLAUDE.md
+AGENTS.md
+
+# Model/build outputs
+*.pkl
+*.joblib
